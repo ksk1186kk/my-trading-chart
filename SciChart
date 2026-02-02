@@ -47,3 +47,150 @@ index.html
     </script>
 </body>
 </html>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trading Chart with EMA & RSI</title>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background-color: #222; font-family: sans-serif; }
+        /* Layout for 2 charts stacked */
+        #main-chart { width: 100%; height: 400px; }
+        #rsi-chart { width: 100%; height: 150px; border-top: 1px solid #444; }
+    </style>
+</head>
+<body>
+    <div id="main-chart"></div>
+    <div id="rsi-chart"></div>
+
+    <script>
+        // --- 1. DATA GENERATION (Sample Data) ---
+        // We generate 100 days of fake data so you can see the Moving Averages curve
+        function generateData() {
+            let res = [];
+            let time = new Date(Date.UTC(2023, 0, 1, 0, 0, 0, 0));
+            let price = 100;
+            for (let i = 0; i < 150; i++) {
+                price = price + Math.random() * 4 - 2;
+                // Format date as YYYY-MM-DD
+                let dateStr = time.toISOString().split('T')[0]; 
+                res.push({
+                    time: dateStr,
+                    open: price - Math.random(),
+                    high: price + Math.random(),
+                    low: price - Math.random() - 1,
+                    close: price
+                });
+                time.setDate(time.getDate() + 1);
+            }
+            return res;
+        }
+        const candleData = generateData();
+
+        // --- 2. CHART SETUP ---
+        const domMain = document.getElementById('main-chart');
+        const domRsi = document.getElementById('rsi-chart');
+
+        const chartOptions = {
+            layout: { background: { type: 'solid', color: '#1E1E1E' }, textColor: '#DDD' },
+            grid: { vertLines: { color: '#2B2B2B' }, horzLines: { color: '#2B2B2B' } },
+            rightPriceScale: { borderVisible: false },
+            timeScale: { borderVisible: false, timeVisible: true },
+        };
+
+        // Create Main Chart
+        const mainChart = LightweightCharts.createChart(domMain, chartOptions);
+        const candleSeries = mainChart.addCandlestickSeries({
+            upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+        });
+        candleSeries.setData(candleData);
+
+        // Create 5 EMA (Yellow)
+        const ema5Series = mainChart.addLineSeries({ color: '#FFD700', lineWidth: 1, title: 'EMA 5' });
+        // Create 20 EMA (Blue)
+        const ema20Series = mainChart.addLineSeries({ color: '#2196F3', lineWidth: 2, title: 'EMA 20' });
+
+        // Create RSI Chart (Bottom)
+        const rsiChart = LightweightCharts.createChart(domRsi, {
+            ...chartOptions,
+            layout: { ...chartOptions.layout, attributionLogo: false }, // Hide logo on small chart
+        });
+        const rsiSeries = rsiChart.addLineSeries({ color: '#9E24F5', lineWidth: 2, title: 'RSI' });
+        
+        // Add RSI 70/30 Levels
+        const rsiLine70 = rsiChart.addLineSeries({ color: 'white', lineWidth: 1, lineStyle: 2 });
+        const rsiLine30 = rsiChart.addLineSeries({ color: 'white', lineWidth: 1, lineStyle: 2 });
+        
+        // --- 3. CALCULATE INDICATORS ---
+        
+        // Helper: Calculate EMA
+        function calculateEMA(data, period) {
+            const k = 2 / (period + 1);
+            let emaArray = [];
+            let ema = data[0].close;
+            for (let i = 0; i < data.length; i++) {
+                const price = data[i].close;
+                ema = price * k + ema * (1 - k);
+                emaArray.push({ time: data[i].time, value: ema });
+            }
+            return emaArray;
+        }
+
+        // Helper: Calculate RSI
+        function calculateRSI(data, period) {
+            let rsiArray = [];
+            let gains = 0;
+            let losses = 0;
+
+            // Initial calculation
+            for (let i = 1; i <= period; i++) {
+                let change = data[i].close - data[i - 1].close;
+                if (change > 0) gains += change;
+                else losses -= change;
+            }
+            let avgGain = gains / period;
+            let avgLoss = losses / period;
+
+            for (let i = period + 1; i < data.length; i++) {
+                let change = data[i].close - data[i - 1].close;
+                let gain = change > 0 ? change : 0;
+                let loss = change < 0 ? -change : 0;
+                
+                avgGain = (avgGain * (period - 1) + gain) / period;
+                avgLoss = (avgLoss * (period - 1) + loss) / period;
+                
+                let rs = avgGain / avgLoss;
+                let rsi = 100 - (100 / (1 + rs));
+                
+                rsiArray.push({ time: data[i].time, value: rsi });
+            }
+            return rsiArray;
+        }
+
+        // Apply Calculations to Charts
+        ema5Series.setData(calculateEMA(candleData, 5));
+        ema20Series.setData(calculateEMA(candleData, 20));
+        rsiSeries.setData(calculateRSI(candleData, 14));
+        
+        // Draw static lines for RSI 70/30
+        const rsiDataPoints = calculateRSI(candleData, 14);
+        rsiLine70.setData(rsiDataPoints.map(d => ({ time: d.time, value: 70 })));
+        rsiLine30.setData(rsiDataPoints.map(d => ({ time: d.time, value: 30 })));
+
+
+        // --- 4. SYNC CHARTS (Zoom/Scroll together) ---
+        mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+            rsiChart.timeScale().setVisibleLogicalRange(range);
+        });
+        rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+            mainChart.timeScale().setVisibleLogicalRange(range);
+        });
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            mainChart.applyOptions({ width: document.body.clientWidth });
+            rsiChart.applyOptions({ width: document.body.clientWidth });
+        });
+    </script>
+</body>
+</html>

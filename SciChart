@@ -2,54 +2,6 @@ index.html
 <!DOCTYPE html>
 <html>
 <head>
-    <title>My Trading Chart</title>
-    <script src="https://cdn.jsdelivr.net/npm/scichart/index.min.js"></script>
-</head>
-<body>
-    <div id="scichart-root" style="width: 100%; height: 500px;"></div>
-
-    <script>
-        async function initSciChart() {
-            const {
-                chartBuilder,
-                ESeriesType,
-                EAxisType,
-                EThemeProviderType
-            } = SciChart;
-
-            // This creates a basic candlestick chart with one command
-            const { sciChartSurface, wasmContext } = await chartBuilder.buildChart("scichart-root", {
-                theme: { type: EThemeProviderType.Dark },
-                xAxes: { type: EAxisType.CategoryAxis },
-                yAxes: { type: EAxisType.NumericAxis, options: { labelPrefix: "$" } },
-                series: [
-                    {
-                        type: ESeriesType.CandlestickSeries,
-                        options: {
-                            strokeUp: "#50ff50",
-                            strokeDown: "#ff5050",
-                            brushUp: "#50ff5033",
-                            brushDown: "#ff505033",
-                        },
-                        xyohlcData: {
-                            xValues: [0, 1, 2, 3, 4],
-                            openValues: [100, 102, 101, 105, 104],
-                            highValues: [105, 106, 103, 109, 107],
-                            lowValues: [98, 100, 99, 103, 102],
-                            closeValues: [102, 101, 105, 104, 108],
-                        }
-                    }
-                ]
-            });
-        }
-
-        initSciChart();
-    </script>
-</body>
-</html>
-<!DOCTYPE html>
-<html>
-<head>
     <title>Trading Chart with EMA & RSI</title>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>

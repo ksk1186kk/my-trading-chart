@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trading Chart with EMA & RSI</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #1a1a1a; font-family: sans-serif; }
+        .chart-wrapper { position: relative; width: 100%; max-width: 900px; margin: 20px auto; }
+        #main-chart { width: 100%; height: 400px; }
+        #rsi-chart { width: 100%; height: 150px; margin-top: 5px; }
+    </style>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+
+    <div class="chart-wrapper">
+        <div id="main-chart"></div>
+        <div id="rsi-chart"></div>
+    </div>
+
+    <script>
+        // --- 1. SETUP CHART INSTANCES ---
+        const chartOptions = {
+            layout: { 
+                textColor: '#d1d4dc', 
+                background: { type: 'solid', color: '#1a1a1a' } 
+            },
+            grid: { 
+                vertLines: { color: '#2B2B43' }, 
+                horzLines: { color: '#2B2B43' } 
+            },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            timeScale: { borderColor: '#485c7b' }
+        };
+
+        // Main Chart (Candles + EMA)
+        const mainChart = LightweightCharts.createChart(document.getElementById('main-chart'), chartOptions);
+        
+        const candleSeries = mainChart.addCandlestickSeries({
+            upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
+            wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+        });
+
+        const emaSeries = mainChart.addLineSeries({
+            color: '#2962FF', lineWidth: 2,
+        });
+
+        // RSI Chart (Separate Pane)
+        const rsiChart = LightweightCharts.createChart(document.getElementById('rsi-chart'), {
+            ...chartOptions,
+            timeScale: { visible: false }, // Hide dates on bottom chart to reduce clutter
+        });
+
+        const rsiSeries = rsiChart.addLineSeries({
+            color: '#ba68c8', lineWidth: 2,
+        });
+        
+        // Add RSI 70/30 Overbought/Oversold lines
+        const topParams = { color: 'rgba(255, 255, 255, 0.3)', lineWidth: 1, lineStyle: 2, axisLabelVisible: false };
+        const overboughtLine = rsiChart.addLineSeries(topParams);
+        const oversoldLine = rsiChart.addLineSeries(topParams);
+
+        // --- 2. DATA GENERATION & INDICATOR MATH ---
+        
+        // Helper: Generate random OHLC data
+        function generateData(count = 200) {
+            let data = [];
+            let time = new Date("2023-01-01").getTime() / 1000;
+            let value = 100;
+            for (let i = 0; i < count; i++) {
+                const open = value + Math.random() * 2 - 1;
+                const close = open + Math.random() * 2 - 1;
+                const high = Math.max(open, close) + Math.random();
+                const low = Math.min(open, close) - Math.random();
+                
+                data.push({ time: time, open, high, low, close });
+                time += 86400; // Next day
+                value = close;
+            }
+            return data;
+        }
+
+        // Helper: Calculate EMA
+        function calculateEMA(data, period) {
+            const k = 2 / (period + 1);
+            let emaData = [];
+            let ema = data[0].close;
+            
+            for (let i = 0; i < data.length; i++) {
+                const price = data[i].close;
+                ema = price * k + ema * (1 - k);
+                emaData.push({ time: data[i].time, value: ema });
+            }
+            return emaData;
+        }
+
+        // Helper: Calculate RSI
+        function calculateRSI(data, period = 14) {
+            let rsiData = [];
+            let gains = 0;
+            let losses = 0;
+
+            // Calculate initial average gain/loss
+            for (let i = 1; i <= period; i++) {
+                const change = data[i].close - data[i - 1].close;
+                if (change > 0) gains += change;
+                else losses -= change;
+            }
+
+            let avgGain = gains / period;
+            let avgLoss = losses / period;
+
+            for (let i = period + 1; i < data.length; i++) {
+                const change = data[i].close - data[i - 1].close;
+                const gain = change > 0 ? change : 0;
+                const loss = change < 0 ? -change : 0;
+
+                avgGain = (avgGain * (period - 1) + gain) / period;
+                avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+                const rs = avgGain / avgLoss;
+                const rsi = 100 - (100 / (1 + rs));
+
+                rsiData.push({ time: data[i].time, value: rsi });
+            }
+            return rsiData;
+        }
+
+        // --- 3. EXECUTE ---
+        const candles = generateData(300);
+        const emaData = calculateEMA(candles, 20); // 20 Period EMA
+        const rsiData = calculateRSI(candles, 14); // 14 Period RSI
+        
+        // Set Data
+        candleSeries.setData(candles);
+        emaSeries.setData(emaData);
+        rsiSeries.setData(rsiData);
+        
+        // Set static lines for RSI
+        overboughtLine.setData(rsiData.map(d => ({ time: d.time, value: 70 })));
+        oversoldLine.setData(rsiData.map(d => ({ time: d.time, value: 30 })));
+
+        // Sync Visible Ranges (Basic sync)
+        mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+            rsiChart.timeScale().setVisibleLogicalRange(range);
+        });
+        rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+            mainChart.timeScale().setVisibleLogicalRange(range);
+        });
+
+        // Fit Content
+        mainChart.timeScale().fitContent();
+    </script>
+</body>
+</html>
